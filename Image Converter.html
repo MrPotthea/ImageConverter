@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Image Converter</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--text:#1c2430;--muted:#667085;--line:#d9dee7;--accent:#1f6feb;--accent-t:#fff;--ok:#157f3b;--err:#c0392b}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14171c;--card:#1d222a;--text:#e8ecf2;--muted:#9aa5b5;--line:#313845;--accent:#4c8dff;--accent-t:#fff;--ok:#4cc27a;--err:#ff7b6b}}
+:root[data-theme="dark"]{--bg:#14171c;--card:#1d222a;--text:#e8ecf2;--muted:#9aa5b5;--line:#313845;--accent:#4c8dff;--accent-t:#fff;--ok:#4cc27a;--err:#ff7b6b}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Arial,"Noto Sans Khmer",sans-serif;line-height:1.5;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+main{max-width:760px;margin:0 auto;padding:20px 16px 40px}
+h1{font-size:22px;margin:0 0 4px}
+p.sub{margin:0 0 16px;color:var(--muted);font-size:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+.drop{border:2px dashed var(--line);border-radius:12px;padding:28px 12px;text-align:center;cursor:pointer;color:var(--muted)}
+.drop.over{border-color:var(--accent);color:var(--accent)}
+.drop b{color:var(--text);display:block;font-size:16px;margin-bottom:4px}
+button{font:inherit;border:0;border-radius:8px;padding:10px 16px;background:var(--accent);color:var(--accent-t);cursor:pointer;font-weight:bold}
+button.sec{background:transparent;color:var(--text);border:1px solid var(--line);font-weight:normal}
+button:disabled{opacity:.45;cursor:not-allowed}
+label{display:flex;gap:8px;align-items:center;font-size:14px;margin:8px 0;flex-wrap:wrap}
+select,input[type=color],input[type=number],input[type=text]{font:inherit;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--text)}
+.sizes label{display:inline-flex;margin:4px 12px 4px 0}
+.item{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}
+.item:last-child{border-bottom:0}
+.item img{width:44px;height:44px;object-fit:contain;border-radius:6px;background:repeating-conic-gradient(var(--line) 0 25%,transparent 0 50%) 0 0/12px 12px}
+.item span.nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item span.sz{color:var(--muted);white-space:nowrap}
+.x{background:none;border:0;color:var(--muted);padding:0 6px;font-size:16px}
+.row{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.msg{font-size:14px;margin-top:10px}
+.ok{color:var(--ok)}.err{color:var(--err)}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <h1>Image Converter · ឧបករណ៍បម្លែងរូបភាព</h1>
+  <p class="sub">Convert PNG, JPG, WebP, GIF, BMP, SVG to JPG, PNG, WebP or ICO. Everything runs in your browser; nothing is uploaded. · បម្លែងរូបភាពក្នុងកម្មវិធីរុករក។</p>
+
+  <div class="card">
+    <div class="drop" id="drop">
+      <b>Click or drop images here · ចុច ឬអូសរូបភាពមកទីនេះ</b>
+      Select several at once
+    </div>
+    <input type="file" id="file" multiple accept="image/*" hidden>
+  </div>
+
+  <div class="card" id="listCard" hidden><div id="list"></div></div>
+
+  <div class="card" id="optCard" hidden>
+    <label>Convert to · បម្លែងទៅជា
+      <select id="fmt">
+        <option value="jpg">JPG</option>
+        <option value="png">PNG</option>
+        <option value="webp">WebP</option>
+        <option value="ico">ICO (icon)</option>
+      </select>
+    </label>
+    <div id="qWrap"><label>Quality · គុណភាព <input type="range" id="q" min="40" max="100" value="92"> <b id="qv">92</b>%</label></div>
+    <div id="bgWrap"><label>Background for transparent areas · ផ្ទៃខាងក្រោយ <input type="color" id="bg" value="#ffffff"></label></div>
+    <div id="rsWrap">
+      <label><input type="checkbox" id="rs"> Custom size · ទំហំផ្ទាល់ខ្លួន</label>
+      <label>Width <input type="number" id="rw" min="1" max="10000" placeholder="auto" style="width:90px"> × Height <input type="number" id="rh" min="1" max="10000" placeholder="auto" style="width:90px"> px</label>
+      <label><input type="checkbox" id="rk" checked> Keep aspect ratio when both are set (fit inside the box)</label>
+      <div style="font-size:13px;color:var(--muted)">Fill only one box to resize proportionally.</div>
+    </div>
+    <div id="icoWrap" hidden>
+      <div style="font-size:14px">Icon sizes (px) · ទំហំរូបតំណាង</div>
+      <div class="sizes" id="sizes"></div>
+      <label>Custom sizes · ទំហំផ្សេង <input type="text" id="cs" placeholder="e.g. 20, 100" style="width:130px"> (1–256, separate with commas)</label>
+    </div>
+    <div class="row">
+      <button id="go">Convert &amp; download</button>
+      <button class="sec" id="clear">Clear</button>
+    </div>
+    <div class="msg" id="msg"></div>
+  </div>
+</main>
+
+<script>
+(function(){
+  var items=[]; // {file,url,w,h}
+  var $=function(id){return document.getElementById(id)};
+  var drop=$('drop'), input=$('file');
+  var downloads=null;
+  try{ if(window.claude&&claude.use){ claude.use('downloads').then(function(d){downloads=d||null}).catch(function(){}) } }catch(e){}
+
+  [16,24,32,48,64,128,256].forEach(function(s){
+    var l=document.createElement('label');
+    l.innerHTML='<input type="checkbox" value="'+s+'"'+([16,32,48,256].indexOf(s)>-1?' checked':'')+'> '+s;
+    $('sizes').appendChild(l);
+  });
+
+  function say(t,c){var m=$('msg');m.textContent=t;m.className='msg '+(c||'')}
+  function kb(n){return n>1048576?(n/1048576).toFixed(1)+' MB':Math.max(1,Math.round(n/1024))+' KB'}
+
+  drop.addEventListener('click',function(){input.click()});
+  input.addEventListener('change',function(){add(input.files);input.value=''});
+  ['dragover','dragenter'].forEach(function(e){drop.addEventListener(e,function(ev){ev.preventDefault();drop.classList.add('over')})});
+  ['dragleave','drop'].forEach(function(e){drop.addEventListener(e,function(ev){ev.preventDefault();drop.classList.remove('over')})});
+  drop.addEventListener('drop',function(ev){add(ev.dataTransfer.files)});
+
+  function add(list){
+    var arr=Array.prototype.slice.call(list).filter(function(f){return /^image\//.test(f.type)||/\.(png|jpe?g|gif|webp|bmp|svg|ico)$/i.test(f.name)});
+    if(!arr.length){say('Please choose image files.','err');return}
+    Promise.all(arr.map(function(f){
+      return new Promise(function(res){
+        var url=URL.createObjectURL(f),im=new Image();
+        im.onload=function(){res({file:f,url:url,w:im.naturalWidth,h:im.naturalHeight})};
+        im.onerror=function(){URL.revokeObjectURL(url);res(null)};
+        im.src=url;
+      });
+    })).then(function(out){
+      var bad=0;
+      out.forEach(function(o){if(!o)bad++;else items.push(o)});
+      render();
+      say(bad?bad+' file(s) could not be read.':'',bad?'err':'');
+    });
+  }
+
+  function render(){
+    var box=$('list');box.textContent='';
+    items.forEach(function(it,i){
+      var d=document.createElement('div');d.className='item';
+      var im=document.createElement('img');im.src=it.url;im.alt='';
+      var n=document.createElement('span');n.className='nm';n.textContent=it.file.name;
+      var s=document.createElement('span');s.className='sz';s.textContent=it.w+'×'+it.h+' · '+kb(it.file.size);
+      var b=document.createElement('button');b.className='x';b.textContent='✕';b.title='Remove';
+      b.onclick=function(){URL.revokeObjectURL(it.url);items.splice(i,1);render()};
+      d.appendChild(im);d.appendChild(n);d.appendChild(s);d.appendChild(b);box.appendChild(d);
+    });
+    $('listCard').hidden=$('optCard').hidden=!items.length;
+  }
+
+  function opts(){
+    var f=$('fmt').value;
+    $('qWrap').hidden=!(f==='jpg'||f==='webp');
+    $('bgWrap').hidden=f!=='jpg';
+    $('icoWrap').hidden=f!=='ico';
+    $('rsWrap').hidden=f==='ico';
+  }
+  $('fmt').onchange=opts;opts();
+  $('q').oninput=function(){$('qv').textContent=this.value};
+  $('clear').onclick=function(){items.forEach(function(i){URL.revokeObjectURL(i.url)});items=[];render();say('')};
+
+  function load(it){return new Promise(function(res,rej){var im=new Image();im.onload=function(){res(im)};im.onerror=rej;im.src=it.url})}
+  function toBlob(c,type,q){return new Promise(function(res,rej){c.toBlob(function(b){b?res(b):rej(new Error('Conversion failed'))},type,q)})}
+
+  function dims(it){
+    var W=+$('rw').value||0,H=+$('rh').value||0;
+    if(!$('rs').checked||(!W&&!H))return [it.w,it.h];
+    if(W&&H){
+      if($('rk').checked){var k=Math.min(W/it.w,H/it.h);return [Math.round(it.w*k),Math.round(it.h*k)]}
+      return [W,H];
+    }
+    if(W)return [W,Math.round(it.h*W/it.w)];
+    return [Math.round(it.w*H/it.h),H];
+  }
+  async function raster(it,type,q,bg){
+    var im=await load(it);
+    var d=dims(it);
+    var c=document.createElement('canvas');c.width=Math.max(1,Math.min(10000,d[0]||300));c.height=Math.max(1,Math.min(10000,d[1]||150));
+    var x=c.getContext('2d');
+    if(bg){x.fillStyle=bg;x.fillRect(0,0,c.width,c.height)}
+    x.drawImage(im,0,0,c.width,c.height);
+    return toBlob(c,type,q);
+  }
+
+  async function makeIco(it,sizes){
+    var im=await load(it),pngs=[];
+    for(var i=0;i<sizes.length;i++){
+      var s=sizes[i],c=document.createElement('canvas');c.width=c.height=s;
+      var x=c.getContext('2d');x.imageSmoothingQuality='high';
+      var w=it.w||s,h=it.h||s,k=Math.min(s/w,s/h),dw=w*k,dh=h*k;
+      x.drawImage(im,(s-dw)/2,(s-dh)/2,dw,dh);
+      var b=await toBlob(c,'image/png');
+      pngs.push(new Uint8Array(await b.arrayBuffer()));
+    }
+    var head=6+16*pngs.length,total=head;
+    pngs.forEach(function(p){total+=p.length});
+    var buf=new ArrayBuffer(total),dv=new DataView(buf),u8=new Uint8Array(buf);
+    dv.setUint16(2,1,true);dv.setUint16(4,pngs.length,true);
+    var off=head;
+    pngs.forEach(function(p,i){
+      var e=6+16*i,s=sizes[i];
+      dv.setUint8(e,s>=256?0:s);dv.setUint8(e+1,s>=256?0:s);
+      dv.setUint16(e+4,1,true);dv.setUint16(e+6,32,true);
+      dv.setUint32(e+8,p.length,true);dv.setUint32(e+12,off,true);
+      u8.set(p,off);off+=p.length;
+    });
+    return new Blob([buf],{type:'image/x-icon'});
+  }
+
+  function save(blob,name){
+    if(downloads)return downloads.save({filename:name,data:blob});
+    return new Promise(function(res){
+      var u=URL.createObjectURL(blob),a=document.createElement('a');
+      a.href=u;a.download=name;document.body.appendChild(a);a.click();
+      setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(u)},100);
+      res();
+    });
+  }
+
+  $('go').onclick=async function(){
+    if(!items.length)return;
+    var f=$('fmt').value,q=$('q').value/100,bg=$('bg').value;
+    var sizes=Array.prototype.map.call(document.querySelectorAll('#sizes input:checked'),function(i){return +i.value});
+    ($('cs').value||'').split(/[ ,]+/).map(Number).forEach(function(n){
+      n=Math.round(n);if(n>=1&&n<=256&&sizes.indexOf(n)<0)sizes.push(n);
+    });
+    sizes.sort(function(a,b){return a-b});
+    if(f==='ico'&&!sizes.length){say('Pick at least one icon size.','err');return}
+    var btn=$('go');btn.disabled=true;say('Converting…');
+    try{
+      var out=[],used={};
+      for(var i=0;i<items.length;i++){
+        var it=items[i],blob;
+        if(f==='jpg')blob=await raster(it,'image/jpeg',q,bg);
+        else if(f==='png')blob=await raster(it,'image/png');
+        else if(f==='webp')blob=await raster(it,'image/webp',q);
+        else blob=await makeIco(it,sizes);
+        var base=it.file.name.replace(/\.[^.]+$/,'')||'image',nm=base+'.'+f;
+        if(used[nm]){nm=base+'-'+(++used[nm])+'.'+f}else used[nm]=1;
+        out.push({name:nm,blob:blob});
+      }
+      // The hosted page can't save .ico directly, so ICO goes inside a .zip there.
+      var zip=out.length>1||(f==='ico'&&downloads);
+      if(zip){
+        var z=new JSZip();out.forEach(function(o){z.file(o.name,o.blob)});
+        var zb=await z.generateAsync({type:'blob'});
+        await save(zb,'converted-'+f+'.zip');
+        say('Done: '+out.length+' file(s) saved as converted-'+f+'.zip'+(f==='ico'?' — unzip to get your .ico file.':'.'),'ok');
+      }else{
+        await save(out[0].blob,out[0].name);
+        say('Done: '+out[0].name+' ('+kb(out[0].blob.size)+').','ok');
+      }
+    }catch(e){
+      if(e&&e.code==='declined')say('Download cancelled. Click again to save.','err');
+      else say('Could not convert: '+((e&&e.message)||'unknown error'),'err');
+    }
+    btn.disabled=false;
+  };
+})();
+</script>
+</body>
+</html>
